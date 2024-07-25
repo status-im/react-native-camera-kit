@@ -6,7 +6,6 @@ android {
     if (agpVersion.tokenize('.')[0].toInteger() >= 7) {
       namespace "com.rncamerakit"
     }
-
     compileSdkVersion = 34
     defaultConfig {
         minSdkVersion = 24
@@ -44,8 +43,9 @@ dependencies {
     // If you want to additionally use the CameraX Extensions library
     // implementation "androidx.camera:camera-extensions:${camerax_version}"
 
-    implementation 'com.google.mlkit:barcode-scanning:17.0.2'
+    implementation 'com.google.zxing:core:3.4.1'
 }
+
 repositories {
     mavenCentral()
 }

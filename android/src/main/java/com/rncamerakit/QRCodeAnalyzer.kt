@@ -1,32 +1,70 @@
 package com.rncamerakit
 
-import android.annotation.SuppressLint
-import androidx.camera.core.ExperimentalGetImage
+import android.graphics.ImageFormat.*
+import android.os.Build
+import android.util.Log
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.common.InputImage
+import com.google.zxing.*
+import com.google.zxing.common.HybridBinarizer
+import java.nio.ByteBuffer
 
-class QRCodeAnalyzer (
-    private val onQRCodesDetected: (qrCodes: List<Barcode>) -> Unit
+private fun ByteBuffer.toByteArray(): ByteArray {
+    rewind()
+    val data = ByteArray(remaining())
+    get(data)
+    return data
+}
+
+class QRCodeAnalyzer(
+    private val onQRCodesDetected: (qrCodes: Result) -> Unit
 ) : ImageAnalysis.Analyzer {
-    @SuppressLint("UnsafeExperimentalUsageError")
-    @ExperimentalGetImage
-    override fun analyze(image: ImageProxy) {
-        val inputImage = InputImage.fromMediaImage(image.image!!, image.imageInfo.rotationDegrees)
 
-        val scanner = BarcodeScanning.getClient()
-        scanner.process(inputImage)
-            .addOnSuccessListener { barcodes ->
-                val strBarcodes = mutableListOf<Barcode>()
-                barcodes.forEach { barcode ->
-                    strBarcodes.add(barcode ?: return@forEach)
-                }
-                onQRCodesDetected(strBarcodes)
-            }
-            .addOnCompleteListener{
-                image.close()
-            }
+    private val yuvFormats = mutableListOf(YUV_420_888)
+
+    init {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            yuvFormats.addAll(listOf(YUV_422_888, YUV_444_888))
+        }
+    }
+
+    private val reader = MultiFormatReader().apply {
+        val map = mapOf(
+            DecodeHintType.POSSIBLE_FORMATS to arrayListOf(BarcodeFormat.QR_CODE)
+        )
+        setHints(map)
+    }
+
+    override fun analyze(image: ImageProxy) {
+        // We are using YUV format because, ImageProxy internally uses ImageReader to get the image
+        // by default ImageReader uses YUV format unless changed.
+        if (image.format !in yuvFormats) {
+            Log.e("QRCodeAnalyzer", "Expected YUV, now = ${image.format}")
+            return
+        }
+
+        val data = image.planes[0].buffer.toByteArray()
+
+        val source = PlanarYUVLuminanceSource(
+            data,
+            image.width,
+            image.height,
+            0,
+            0,
+            image.width,
+            image.height,
+            false
+        )
+
+        val binaryBitmap = BinaryBitmap(HybridBinarizer(source))
+        try {
+            // Whenever reader fails to detect a QR code in image
+            // it throws NotFoundException
+            val result = reader.decode(binaryBitmap)
+            onQRCodesDetected(result)
+        } catch (e: NotFoundException) {
+            e.printStackTrace()
+        }
+        image.close()
     }
 }

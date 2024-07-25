@@ -41,7 +41,7 @@ import kotlin.math.min
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
-import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.zxing.*
 
 class RectOverlay constructor(context: Context) :
         View(context) {
@@ -305,10 +305,8 @@ class CKCamera(context: ThemedReactContext) : FrameLayout(context), LifecycleObs
         val useCases = mutableListOf(preview, imageCapture)
 
         if (scanBarcode) {
-            val analyzer = QRCodeAnalyzer { barcodes ->
-                if (barcodes.isNotEmpty()) {
-                    onBarcodeRead(barcodes)
-                }
+            val analyzer = QRCodeAnalyzer { qrResult ->
+                onBarcodeRead(qrResult)
             }
             imageAnalyzer!!.setAnalyzer(cameraExecutor, analyzer)
             useCases.add(imageAnalyzer)
@@ -458,11 +456,10 @@ class CKCamera(context: ThemedReactContext) : FrameLayout(context), LifecycleObs
         rectOverlay.drawRectBounds(focusRects)
     }
 
-    private fun onBarcodeRead(barcodes: List<Barcode>) {
+    private fun onBarcodeRead(barcode: Result) {
         val event: WritableMap = Arguments.createMap()
-        event.putString("codeStringValue", barcodes.first().rawValue)
-        val codeFormat = CodeFormat.fromBarcodeType(barcodes.first().format);
-        event.putString("codeFormat",codeFormat.code );
+        event.putString("codeStringValue", barcode.text)
+        event.putString("codeFormat",barcode.barcodeFormat.name);
         currentContext.getJSModule(RCTEventEmitter::class.java).receiveEvent(
                 id,
                 "onReadCode",
